@@ -1,6 +1,20 @@
 // src/features/encryption.js
 
 /**
+ * PBKDF2 iteration count.
+ *
+ * 100,000 iterations is the production-safe default — it makes brute-force
+ * attacks expensive. Tests can override this via the PERSISTA_PBKDF2_ITERATIONS
+ * environment variable to keep the suite fast without changing source code.
+ *
+ * In your jest.config.js testEnvironmentOptions or jest.setup.js:
+ *   process.env.PERSISTA_PBKDF2_ITERATIONS = '1';
+ */
+const PBKDF2_ITERATIONS = process.env.PERSISTA_PBKDF2_ITERATIONS
+  ? parseInt(process.env.PERSISTA_PBKDF2_ITERATIONS, 10)
+  : 100000;
+
+/**
  * Convert string to ArrayBuffer for crypto operations
  */
 function strToBuffer(str) {
@@ -32,7 +46,7 @@ async function getCryptoKey(password, salt) {
     {
       name: 'PBKDF2',
       salt: salt,       // pass the Uint8Array directly — NOT encoder.encode(salt)
-      iterations: 100000,
+      iterations: PBKDF2_ITERATIONS,
       hash: 'SHA-256'
     },
     keyMaterial,
