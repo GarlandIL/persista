@@ -1,5 +1,3 @@
-// src/core/utils.js
-
 /**
  * Safely parse JSON, returning fallback on error.
  */

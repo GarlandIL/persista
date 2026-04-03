@@ -1,4 +1,3 @@
-// jest.setup.js
 const { webcrypto } = require('crypto');
 const { TextEncoder, TextDecoder } = require('util');
 

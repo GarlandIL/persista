@@ -1,4 +1,3 @@
-// src/core/storage.js
 import { safeParse, deepClone, serialize, deserialize, getValueType } from './utils';
 import { StorageError, QuotaExceededError } from './errors';
 import { isExpired, getExpiryTimestamp } from '../features/expiration';

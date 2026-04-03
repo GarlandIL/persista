@@ -1,4 +1,3 @@
-// src/core/errors.js
 export class StorageError extends Error {
   constructor(message) {
     super(message);

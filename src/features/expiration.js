@@ -1,5 +1,3 @@
-// src/features/expiration.js
-
 /**
  * Check whether a stored item has passed its expiry time.
  *

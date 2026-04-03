@@ -1,4 +1,3 @@
-// tests/expiration-event.test.js
 import Persista from '../src/core/storage';
 
 describe('Persista - Expiration & Events', () => {

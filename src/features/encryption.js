@@ -1,5 +1,3 @@
-// src/features/encryption.js
-
 /**
  * PBKDF2 iteration count.
  *

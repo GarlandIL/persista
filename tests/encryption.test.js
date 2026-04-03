@@ -1,4 +1,3 @@
-// tests/encryption.test.js
 import Persista from '../src/core/storage';
 
 describe('Persista - Encryption', () => {
