@@ -1,11 +1,13 @@
 {
   "name": "persista",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A powerful localStorage wrapper with expiration, encryption, events and more",
-  "main": "dist/index.js",
-  "module": "dist/index.esm.js",
+  "main": "dist/persista.js",
+  "module": "dist/persista.esm.js",
+  "types": "index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "index.d.ts"
   ],
   "scripts": {
     "build": "rollup -c",
@@ -19,7 +21,9 @@
     "wrapper",
     "expiration",
     "encryption",
-    "events"
+    "events",
+    "ttl",
+    "browser"
   ],
   "author": "Your Name",
   "license": "MIT",
@@ -34,6 +38,7 @@
     "babel-jest": "^30.3.0",
     "eslint": "^8.0.0",
     "jest": "^29.0.0",
+    "jest-environment-jsdom": "^30.3.0",
     "rollup": "^3.0.0"
   }
 }
