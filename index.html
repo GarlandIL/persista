@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Persista Demo</title>
+</head>
+<body>
+  <h1>Persista Demo</h1>
+  <button id="setBtn">Set flashMessage (expires in 3s)</button>
+  <button id="getBtn">Get flashMessage</button>
+  <pre id="output"></pre>
+
+  <script type="module">
+    // Import from source (or build first)
+    import Persista from './src/index.js';
+
+    const store = new Persista({ prefix: 'demo', debug: true });
+    const output = document.getElementById('output');
+
+    store.on('set', (key, value) => {
+      output.innerHTML += `✅ Set ${key}: ${JSON.stringify(value)}\n`;
+    });
+    store.on('expired', (key) => {
+      output.innerHTML += `⏰ Expired: ${key}\n`;
+    });
+
+    document.getElementById('setBtn').onclick = () => {
+      store.set('flashMessage', 'Welcome back!', { expires: 3000 });
+    };
+    document.getElementById('getBtn').onclick = () => {
+      const val = store.get('flashMessage');
+      output.innerHTML += `🔍 Get flashMessage → ${val}\n`;
+    };
+  </script>
+</body>
+</html>

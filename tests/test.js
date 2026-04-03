@@ -1,4 +1,4 @@
-import Persista from '../core/storage';
+import Persista from '../src/core/storage';
 
 describe('Persista basic', () => {
   let storage;
