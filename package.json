@@ -1,6 +1,7 @@
 {
   "name": "persista",
   "version": "0.2.0",
+  "type": "module",
   "description": "A powerful localStorage wrapper with expiration, encryption, events and more",
   "main": "dist/persista.js",
   "module": "dist/persista.esm.js",
@@ -29,7 +30,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/GarlandIL/persista.git"
+    "url": "git+https://github.com/GarlandIL/persista.git"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",

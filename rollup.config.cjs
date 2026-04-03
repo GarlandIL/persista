@@ -1,6 +1,6 @@
-import terser from '@rollup/plugin-terser';
+const terser = require('@rollup/plugin-terser');
 
-export default {
+module.exports = {
   input: 'src/index.js',
   output: [
     {
@@ -9,6 +9,7 @@ export default {
       name: 'Persista',
       sourcemap: true,
       inlineDynamicImports: true,
+      exports: 'named',
     },
     {
       file: 'dist/persista.min.js',
@@ -17,6 +18,7 @@ export default {
       plugins: [terser()],
       sourcemap: true,
       inlineDynamicImports: true,
+      exports: 'named',
     },
     {
       file: 'dist/persista.esm.js',
