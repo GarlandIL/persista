@@ -3,7 +3,7 @@
 [![npm version](https://badge.fury.io/js/persista.svg)](https://www.npmjs.com/package/persista)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A powerful `localStorage` wrapper with **expiration (TTL)**, **AES-GCM encryption**, **events**, **storage monitoring**, and **smart cleanup** — all with full type preservation for objects, arrays, Maps, Sets, and Dates.
+A powerful `localStorage` wrapper with **expiration (TTL)**, **AES-GCM encryption**, **events**, **storage monitoring**, and **smart cleanup**, all with full type preservation for objects, arrays, Maps, Sets, and Dates.
 
 ---
 
