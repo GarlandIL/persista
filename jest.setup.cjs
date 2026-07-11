@@ -1,7 +1,7 @@
 const { webcrypto } = require('crypto');
 const { TextEncoder, TextDecoder } = require('util');
 
-// Use 1 PBKDF2 iteration in tests — production uses 100,000.
+// Use 1 PBKDF2 iteration in tests - production uses 100,000.
 // This cuts encryption test time from ~30s down to ~1s while keeping
 // all functional behaviour identical. Never set this in production code.
 process.env.PERSISTA_PBKDF2_ITERATIONS = '1';
