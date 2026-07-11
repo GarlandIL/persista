@@ -3,7 +3,7 @@
 [![npm version](https://badge.fury.io/js/persista.svg)](https://www.npmjs.com/package/persista)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A powerful `localStorage` wrapper with **expiration (TTL)**, **AES-GCM encryption**, **events**, **storage monitoring**, and **smart cleanup** — all with full type preservation for objects, arrays, Maps, Sets, and Dates.
+A powerful `localStorage` wrapper with **expiration (TTL)**, **AES-GCM encryption**, **events**, **storage monitoring**, and **smart cleanup**, all with full type preservation for objects, arrays, Maps, Sets, and Dates.
 
 ---
 
@@ -227,7 +227,7 @@ Fires the `'clear'` event with an array of the removed key names.
 has(key: string): boolean
 ```
 
-Check whether a key exists in storage. **Synchronous.** Does not check expiry — use `get()` if you need expiry-aware existence checking.
+Check whether a key exists in storage. **Synchronous.** Does not check expiry - use `get()` if you need expiry-aware existence checking.
 
 ```js
 if (storage.has('user')) {
@@ -375,7 +375,7 @@ Remove items matching the given criteria. Returns the number of items removed. *
 
 ```ts
 interface CleanupOptions {
-  removeExpired?: boolean; // default: true  — remove TTL-expired items
+  removeExpired?: boolean; // default: true - remove TTL-expired items
   olderThan?:     number;  // remove items created more than N ms ago
   keep?:          number;  // after other rules, keep only the N newest items
 }
@@ -486,7 +486,7 @@ const set = await storage.get('set');  // instanceof Set ✅
 const d   = await storage.get('date'); // instanceof Date ✅
 ```
 
-`Map` and `Set` are serialised to a tagged object format internally so they survive `JSON.stringify` → `JSON.parse`. This is handled automatically — no extra steps required.
+`Map` and `Set` are serialised to a tagged object format internally so they survive `JSON.stringify` → `JSON.parse`. This is handled automatically - no extra steps required.
 
 ---
 
@@ -503,7 +503,7 @@ const storage = new Persista({
 });
 
 await storage.set('creditCard', '4111-1111-1111-1111');
-// Raw localStorage value is base64 ciphertext — unreadable without the key
+// Raw localStorage value is base64 ciphertext - unreadable without the key
 ```
 
 ### Disable encryption for a single item
@@ -518,7 +518,7 @@ Each encrypted item has a **fresh random salt (16 bytes) and IV (12 bytes)** gen
 
 - Two writes of the same value produce completely different ciphertexts.
 - Even if an attacker captures the ciphertext, they cannot determine the original value without the key.
-- The key itself is never stored — it lives only in your JavaScript and is used to derive the actual AES key via PBKDF2 (100,000 iterations, SHA-256).
+- The key itself is never stored - it lives only in your JavaScript and is used to derive the actual AES key via PBKDF2 (100,000 iterations, SHA-256).
 
 ### Notes
 
@@ -545,29 +545,29 @@ When `get()` is called on an expired item:
 2. The `'expired'` event is fired.
 3. `null` (or your `defaultValue`) is returned.
 
-Items are not proactively scanned — expiry is checked lazily on access. Use `cleanup({ removeExpired: true })` to purge expired items without reading them.
+Items are not proactively scanned - expiry is checked lazily on access. Use `cleanup({ removeExpired: true })` to purge expired items without reading them.
 
 ---
 
 ## Events
 
 ```js
-// 'set' — fired after every successful write
+// 'set' - fired after every successful write
 storage.on('set', (key, value, options) => {
   console.log(`Stored "${key}"`);
 });
 
-// 'remove' — fired when a key is explicitly removed
+// 'remove' - fired when a key is explicitly removed
 storage.on('remove', (key, previousValue) => {
   console.log(`Removed "${key}", had value:`, previousValue);
 });
 
-// 'clear' — fired when the entire instance is cleared
+// 'clear' - fired when the entire instance is cleared
 storage.on('clear', (removedKeys) => {
   console.log(`Cleared ${removedKeys.length} keys`);
 });
 
-// 'expired' — fired when a TTL item is detected as expired during get()
+// 'expired' - fired when a TTL item is detected as expired during get()
 storage.on('expired', (key, rawStoredValue) => {
   console.log(`"${key}" expired and was removed`);
 });
@@ -590,7 +590,7 @@ console.log(`${pct.toFixed(2)}% full`);
 
 // Warn before quota is exceeded
 if (storage.getUsage() > 80) {
-  console.warn('Storage is over 80% — consider cleanup');
+  console.warn('Storage is over 80% - consider cleanup');
 }
 
 // Remaining bytes
@@ -646,7 +646,7 @@ try {
   await storage.set('key', hugePayload);
 } catch (err) {
   if (err instanceof QuotaExceededError) {
-    // localStorage quota exceeded — run cleanup or alert the user
+    // localStorage quota exceeded - run cleanup or alert the user
     storage.cleanup({ removeExpired: true, olderThan: 7 * 24 * 60 * 60 * 1000 });
   } else if (err instanceof StorageError) {
     console.error('Storage error:', err.message);

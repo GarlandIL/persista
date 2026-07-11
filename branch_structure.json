@@ -1,0 +1,33 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "docs/readme-updates",
+    "feat/developer-playground",
+    "feat/husky-hooks",
+    "gh-pages",
+    "main",
+    "origin",
+    "perf/crypto-optimizations",
+    "test/validation-suite"
+  ],
+  "parent": {
+    "docs/readme-updates": "main",
+    "feat/developer-playground": "main",
+    "feat/husky-hooks": "main",
+    "gh-pages": "main",
+    "main": null,
+    "origin": "main",
+    "perf/crypto-optimizations": "main",
+    "test/validation-suite": "main"
+  },
+  "order": [
+    "main",
+    "docs/readme-updates",
+    "feat/developer-playground",
+    "feat/husky-hooks",
+    "gh-pages",
+    "origin",
+    "perf/crypto-optimizations",
+    "test/validation-suite"
+  ]
+}
