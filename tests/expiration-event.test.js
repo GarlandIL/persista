@@ -40,7 +40,7 @@ describe('Persista - Expiration & Events', () => {
 
   //  Events 
 
-  // Fix #1: set() is async — must be awaited before asserting the mock
+  // set() is async and must be awaited before asserting the mock
   test('emits "set" event with key, value, options', async () => {
     const mock = jest.fn();
     storage.on('set', mock);

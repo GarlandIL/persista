@@ -9,7 +9,7 @@ describe('Persista basic', () => {
     storage.clear();
   });
 
-  // FIX #3: set() and get() are async — must be awaited or the assertions
+  // set() and get() are async - must be awaited or the assertions
   // run before the Promise resolves, producing false-green results.
 
   test('set and get', async () => {
