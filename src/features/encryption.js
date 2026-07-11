@@ -1,35 +1,39 @@
-/**
- * PBKDF2 iteration count.
- *
- * 100,000 iterations is the production-safe default — it makes brute-force
- * attacks expensive. Tests can override this via the PERSISTA_PBKDF2_ITERATIONS
- * environment variable to keep the suite fast without changing source code.
- *
- * In your jest.config.js testEnvironmentOptions or jest.setup.js:
- *   process.env.PERSISTA_PBKDF2_ITERATIONS = '1';
- */
-const PBKDF2_ITERATIONS = process.env.PERSISTA_PBKDF2_ITERATIONS
+const PBKDF2_ITERATIONS = typeof process !== 'undefined' && process.env && process.env.PERSISTA_PBKDF2_ITERATIONS
   ? parseInt(process.env.PERSISTA_PBKDF2_ITERATIONS, 10)
   : 100000;
 
-/**
- * Convert string to ArrayBuffer for crypto operations
- */
 function strToBuffer(str) {
   return new TextEncoder().encode(str);
 }
 
 /**
- * Generate a cryptographic key from a password string and a salt.
- *
- * The salt parameter is already a Uint8Array (generated via
- * crypto.getRandomValues). We must pass it directly to deriveKey — NOT
- * re-encode it with TextEncoder, which would encode the array's string
- * representation ("0,123,45,...") instead of the actual bytes.
- *
- * @param {string}     password - The user-supplied encryption key
- * @param {Uint8Array} salt     - Raw random salt bytes
- * @returns {Promise<CryptoKey>}
+ * Convert Uint8Array to a Base64 string in chunks.
+ */
+function bufferToBase64(bytes) {
+  let binary = '';
+  const len = bytes.byteLength;
+  const chunkSize = 0x8000;
+  for (let i = 0; i < len; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Convert a Base64 string to a Uint8Array.
+ */
+function base64ToBuffer(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/**
+ * Generate a cryptographic key using PBKDF2.
  */
 async function getCryptoKey(password, salt) {
   const keyMaterial = await crypto.subtle.importKey(
@@ -43,7 +47,7 @@ async function getCryptoKey(password, salt) {
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt: salt,       // pass the Uint8Array directly — NOT encoder.encode(salt)
+      salt,
       iterations: PBKDF2_ITERATIONS,
       hash: 'SHA-256'
     },
@@ -56,22 +60,12 @@ async function getCryptoKey(password, salt) {
 
 /**
  * Encrypt data using AES-GCM.
- *
- * Layout of the stored byte string (before base64):
- *   [ 16 bytes salt ][ 12 bytes IV ][ N bytes ciphertext ]
- *
- * @param {any}    data     - Any JSON-serialisable value
- * @param {string} password - Encryption password
- * @returns {Promise<string>} Base64-encoded encrypted payload
  */
 export async function encrypt(data, password) {
   try {
     const jsonStr = JSON.stringify(data);
-
-    // Random salt (16 bytes) and IV (12 bytes) — new values every call
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iv   = crypto.getRandomValues(new Uint8Array(12));
-
     const key = await getCryptoKey(password, salt);
 
     const encrypted = await crypto.subtle.encrypt(
@@ -80,31 +74,23 @@ export async function encrypt(data, password) {
       strToBuffer(jsonStr)
     );
 
-    // Pack: salt | iv | ciphertext → base64
     const result = new Uint8Array(salt.length + iv.length + encrypted.byteLength);
     result.set(salt, 0);
     result.set(iv, salt.length);
     result.set(new Uint8Array(encrypted), salt.length + iv.length);
 
-    return btoa(String.fromCharCode(...result));
+    return bufferToBase64(result);
   } catch (error) {
     throw new Error(`Encryption failed: ${error.message}`);
   }
 }
 
 /**
- * Decrypt data that was encrypted with encrypt().
- *
- * @param {string} encryptedBase64 - Base64 payload from encrypt()
- * @param {string} password        - Same password used to encrypt
- * @returns {Promise<any>} Original value
+ * Decrypt data using AES-GCM.
  */
 export async function decrypt(encryptedBase64, password) {
   try {
-    const binaryStr     = atob(encryptedBase64);
-    const encryptedData = Uint8Array.from(binaryStr, c => c.charCodeAt(0));
-
-    // Unpack salt | iv | ciphertext
+    const encryptedData = base64ToBuffer(encryptedBase64);
     const salt       = encryptedData.slice(0, 16);
     const iv         = encryptedData.slice(16, 28);
     const ciphertext = encryptedData.slice(28);
