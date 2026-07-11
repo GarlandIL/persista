@@ -1,18 +1,36 @@
-import { safeParse, deepClone, serialize, deserialize, getValueType } from './utils';
-import { StorageError, QuotaExceededError } from './errors';
+import { safeParse, serialize, deserialize, getValueType } from './utils';
+import { StorageError, QuotaExceededError, ValidationError } from './errors';
 import { isExpired, getExpiryTimestamp } from '../features/expiration';
+import { encrypt, decrypt } from '../features/encryption';
 
 class Persista {
   /**
    * Create a new Persista instance.
-   *
-   * @param {Object}  options
-   * @param {string}  [options.prefix='']          - Key prefix to namespace this instance
-   * @param {string}  [options.separator=':']      - Separator between prefix and key
-   * @param {boolean} [options.debug=false]        - Log operations to console
-   * @param {{ key: string }} [options.encryption] - Enable AES-GCM encryption
+   * @param {Object}  [options]
+   * @param {string}  [options.prefix='']
+   * @param {string}  [options.separator=':']
+   * @param {boolean} [options.debug=false]
+   * @param {{ key: string }} [options.encryption]
    */
   constructor(options = {}) {
+    if (options.prefix !== undefined && typeof options.prefix !== 'string') {
+      throw new ValidationError('Prefix option must be a string');
+    }
+    if (options.separator !== undefined && typeof options.separator !== 'string') {
+      throw new ValidationError('Separator option must be a string');
+    }
+    if (options.debug !== undefined && typeof options.debug !== 'boolean') {
+      throw new ValidationError('Debug option must be a boolean');
+    }
+    if (options.encryption !== undefined) {
+      if (typeof options.encryption !== 'object' || options.encryption === null) {
+        throw new ValidationError('Encryption option must be an object');
+      }
+      if (options.encryption.key !== undefined && (typeof options.encryption.key !== 'string' || !options.encryption.key)) {
+        throw new ValidationError('Encryption key must be a non-empty string');
+      }
+    }
+
     this.prefix    = options.prefix    || '';
     this.separator = options.separator || ':';
     this.debug     = options.debug     || false;
@@ -21,7 +39,6 @@ class Persista {
     this.encryptionKey     = options.encryption?.key || null;
     this.encryptionEnabled = !!this.encryptionKey;
 
-    // Append separator to prefix once, so _getFullKey is a simple concatenation
     if (this.prefix && !this.prefix.endsWith(this.separator)) {
       this.prefix = this.prefix + this.separator;
     }
@@ -30,7 +47,7 @@ class Persista {
       throw new StorageError('localStorage is not available in this environment');
     }
 
-    if (this.encryptionEnabled && typeof crypto === 'undefined') {
+    if (this.encryptionEnabled && (typeof crypto === 'undefined' || !crypto.subtle)) {
       if (this.debug) {
         console.warn('[persista] Encryption enabled but Web Crypto API not available. Falling back to plain storage.');
       }
@@ -39,12 +56,19 @@ class Persista {
     }
   }
 
-  // ─── Internal helpers ────────────────────────────────────────────────────────
+  /**
+   * Validate key format.
+   * @private
+   */
+  _validateKey(key) {
+    if (typeof key !== 'string' || !key) {
+      throw new ValidationError('Storage key must be a non-empty string');
+    }
+  }
 
   /**
-   * Returns the full localStorage key for a given user-facing key.
-   * Intentionally accessible (no truly private methods in ES6 classes) —
-   * useful for tests that need to read/manipulate raw storage entries.
+   * Get internal key representation.
+   * @private
    */
   _getFullKey(key) {
     return this.prefix + key;
@@ -56,54 +80,59 @@ class Persista {
 
   _handleError(operation, error) {
     if (this.debug) console.error(`[persista error] ${operation}:`, error);
-    if (error.name === 'QuotaExceededError') throw new QuotaExceededError(error.message);
+    if (error instanceof ValidationError) throw error;
+    
+    if (
+      error.name === 'QuotaExceededError' ||
+      error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+      error.code === 22 ||
+      error.code === 1014 ||
+      /quota|exceeded|limit/i.test(error.message || '')
+    ) {
+      throw new QuotaExceededError(error.message);
+    }
+    
     throw new StorageError(`Failed to ${operation}: ${error.message}`);
   }
 
-  // ─── Core API ────────────────────────────────────────────────────────────────
-
   /**
-   * Store a value. Returns true on success.
-   * Always async — keeps the API stable whether or not encryption is in use.
-   *
-   * FIX #2: valueType is captured BEFORE encryption so getInfo() always
-   * reports the original type rather than 'string' (the ciphertext type).
-   *
-   * FIX #12: passing encrypt:true when the instance has no key now logs a
-   * warning in debug mode rather than silently doing nothing.
-   *
+   * Set a value in storage.
    * @param {string}  key
    * @param {*}       value
    * @param {Object}  [options]
-   * @param {number}  [options.expires]  - TTL in milliseconds
-   * @param {boolean} [options.encrypt]  - Override instance encryption setting
+   * @param {number}  [options.expires]
+   * @param {boolean} [options.encrypt]
    * @returns {Promise<boolean>}
    */
   async set(key, value, options = {}) {
+    this._validateKey(key);
+    if (options.expires !== undefined && options.expires !== null) {
+      if (typeof options.expires !== 'number' || options.expires < 0) {
+        throw new ValidationError('Expiration TTL must be a non-negative number');
+      }
+    }
+    if (options.encrypt !== undefined && typeof options.encrypt !== 'boolean') {
+      throw new ValidationError('Encrypt option must be a boolean');
+    }
+
     try {
-      // FIX #12: warn when caller asks to encrypt but instance has no key
       if (options.encrypt === true && !this.encryptionEnabled) {
         if (this.debug) {
-          console.warn('[persista] encrypt:true was passed but no encryption key is configured on this instance. Storing as plain text.');
+          console.warn('[persista] encrypt:true was passed but no encryption key is configured. Storing as plain text.');
         }
       }
 
       const shouldEncrypt = this.encryptionEnabled && options.encrypt !== false;
-
-      // FIX #2: capture valueType from the ORIGINAL value, before any transformation
       const valueType = getValueType(value);
-
-      // Serialize first (handles Map/Set/Date) then optionally encrypt
-      let storedValue = serialize(deepClone(value));
+      let storedValue = serialize(value);
 
       if (shouldEncrypt) {
-        const { encrypt } = await import('../features/encryption');
         storedValue = await encrypt(storedValue, this.encryptionKey);
       }
 
       const item = {
         value:     storedValue,
-        valueType, // FIX #2: stored in envelope so getInfo() can read it regardless of encryption
+        valueType,
         timestamp: Date.now(),
         expires:   options.expires ?? null,
         encrypted: shouldEncrypt
@@ -120,14 +149,13 @@ class Persista {
   }
 
   /**
-   * Retrieve a value. Returns defaultValue if the key is missing or expired.
-   * Always async — keeps the API stable whether or not encryption is in use.
-   *
+   * Get a value from storage.
    * @param {string} key
    * @param {*}      [defaultValue=null]
    * @returns {Promise<*>}
    */
   async get(key, defaultValue = null) {
+    this._validateKey(key);
     try {
       const raw = localStorage.getItem(this._getFullKey(key));
       if (!raw) return defaultValue;
@@ -135,26 +163,22 @@ class Persista {
       const item = safeParse(raw);
       if (!item) return defaultValue;
 
-      // Check expiration using the helper from expiration.js
       if (isExpired(item)) {
         this._log(`expired: ${key}`);
-        this.remove(key);
+        this.remove(key, true);
         this._emit('expired', key, item.value);
         return defaultValue;
       }
 
       let value = item.value;
 
-      // Decrypt if necessary, then deserialize (restores Map/Set/Date)
       if (item.encrypted && this.encryptionEnabled) {
-        const { decrypt } = await import('../features/encryption');
         value = await decrypt(value, this.encryptionKey);
       }
 
       value = deserialize(value);
-
       this._log(`get: ${key}`, value);
-      return deepClone(value);
+      return value;
     } catch (error) {
       this._handleError('get', error);
       return defaultValue;
@@ -162,17 +186,23 @@ class Persista {
   }
 
   /**
-   * Remove a single key. Synchronous.
-   * @param {string} key
+   * Remove a value from storage.
+   * @param {string}  key
+   * @param {boolean} [_isEviction=false]
    * @returns {boolean}
    */
-  remove(key) {
+  remove(key, _isEviction = false) {
+    this._validateKey(key);
     try {
       const fullKey  = this._getFullKey(key);
       const existing = localStorage.getItem(fullKey);
+      if (existing === null) return false;
+      
       localStorage.removeItem(fullKey);
       this._log(`remove: ${key}`);
-      this._emit('remove', key, existing ? safeParse(existing)?.value : null);
+      if (!_isEviction) {
+        this._emit('remove', key, existing ? safeParse(existing)?.value : null);
+      }
       return true;
     } catch (error) {
       this._handleError('remove', error);
@@ -181,26 +211,18 @@ class Persista {
   }
 
   /**
-   * Remove all keys belonging to this instance's prefix. Synchronous.
-   *
-   * Single pass: collect the prefixed keys, fire the event with the
-   * unprefixed names, then delete. Avoids the double-iteration bug where
-   * keys() and the deletion loop could see different state.
-   *
+   * Clear storage under the current prefix.
    * @returns {boolean}
    */
   clear() {
     try {
-      // Single pass over localStorage
       const prefixedKeys = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (k && k.startsWith(this.prefix)) prefixedKeys.push(k);
       }
 
-      // Derive the user-facing (unprefixed) names for the event
       const unprefixedKeys = prefixedKeys.map(k => k.slice(this.prefix.length));
-
       prefixedKeys.forEach(k => localStorage.removeItem(k));
 
       this._log('clear all');
@@ -212,38 +234,43 @@ class Persista {
     }
   }
 
-  // ─── Query API (all synchronous) ─────────────────────────────────────────────
-
   /**
-   * Check whether a key exists in storage. Synchronous. Does NOT check expiry.
-   *
-   * If you need to know whether an item is still valid (not expired), use
-   * get() instead — it removes expired items and returns null for them.
-   * Alternatively, use hasValid() for a convenience expiry-aware check.
-   *
+   * Check if a key exists in storage.
    * @param {string} key
    * @returns {boolean}
    */
   has(key) {
+    this._validateKey(key);
     return localStorage.getItem(this._getFullKey(key)) !== null;
   }
 
   /**
-   * FIX #1: Expiry-aware existence check. Returns true only if the key exists
-   * AND has not yet expired. Async because it delegates to get().
-   *
-   * Unlike has(), this removes the expired item as a side-effect (same as get()).
-   *
+   * Expiry-aware existence check.
    * @param {string} key
    * @returns {Promise<boolean>}
    */
   async hasValid(key) {
-    const value = await this.get(key);
-    return value !== null;
+    this._validateKey(key);
+    try {
+      const raw = localStorage.getItem(this._getFullKey(key));
+      if (!raw) return false;
+      const item = safeParse(raw);
+      if (!item) return false;
+      if (isExpired(item)) {
+        this._log(`expired: ${key}`);
+        this.remove(key, true);
+        this._emit('expired', key, item.value);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      this._handleError('hasValid', error);
+      return false;
+    }
   }
 
   /**
-   * Return all keys belonging to this prefix (without the prefix). O(n).
+   * Get all unprefixed keys under the current prefix.
    * @returns {string[]}
    */
   keys() {
@@ -256,37 +283,30 @@ class Persista {
   }
 
   /**
-   * Return all stored key-value pairs as a plain object.
-   * Async because individual get() calls may need to decrypt.
-   * Failed decryptions return null for that key and do not throw.
+   * Get all entries as a plain object.
    * @returns {Promise<Record<string, *>>}
    */
   async all() {
+    const keys = this.keys();
+    const values = await Promise.all(keys.map(key => this.get(key)));
     const result = {};
-    for (const key of this.keys()) {
-      result[key] = await this.get(key);
-    }
+    keys.forEach((key, index) => {
+      result[key] = values[index];
+    });
     return result;
   }
 
   /**
-   * Return the number of keys stored under this prefix. O(n).
+   * Get keys count.
    * @returns {number}
    */
   count() {
     return this.keys().length;
   }
 
-  // ─── Storage monitoring (all synchronous) ────────────────────────────────────
-
   /**
-   * Return the total bytes used by this prefix.
-   *
-   * localStorage internally stores strings as UTF-16 (2 bytes per character)
-   * in most browser implementations. Multiplying character length by 2 gives
-   * a close approximation. Actual browser accounting may differ slightly.
-   *
-   * @returns {number} Estimated bytes used
+   * Get total estimated byte size.
+   * @returns {number}
    */
   getSize() {
     let total = 0;
@@ -309,36 +329,36 @@ class Persista {
   }
 
   /**
-   * Return storage usage as a percentage of the given quota.
-   * Note: this reflects only this instance's data vs. the shared browser quota.
-   *
-   * @param {number} [quotaMax=5242880] - Quota in bytes (default 5 MB)
-   * @returns {number} Percentage between 0 and 100
+   * Get usage percentage relative to quota.
+   * @param {number} [quotaMax=5242880]
+   * @returns {number}
    */
   getUsage(quotaMax = 5 * 1024 * 1024) {
+    if (typeof quotaMax !== 'number' || quotaMax <= 0) {
+      throw new ValidationError('quotaMax must be a positive number');
+    }
     return (this.getSize() / quotaMax) * 100;
   }
 
   /**
-   * Return estimated remaining space in bytes.
+   * Get estimated remaining storage space in bytes.
    * @param {number} [quotaMax=5242880]
    * @returns {number}
    */
   getRemainingSpace(quotaMax = 5 * 1024 * 1024) {
+    if (typeof quotaMax !== 'number' || quotaMax <= 0) {
+      throw new ValidationError('quotaMax must be a positive number');
+    }
     return Math.max(0, quotaMax - this.getSize());
   }
 
   /**
-   * Return metadata about a specific key.
-   *
-   * FIX #2: valueType is now read from the stored envelope (set at write-time
-   * before any encryption), so it always reflects the original data type even
-   * for encrypted items.
-   *
+   * Get metadata info for a key.
    * @param {string} key
-   * @returns {{ key, size, created, expires, valueType, hasExpired } | null}
+   * @returns {Object|null}
    */
   getInfo(key) {
+    this._validateKey(key);
     const fullKey = this._getFullKey(key);
     const raw     = localStorage.getItem(fullKey);
     if (!raw) return null;
@@ -351,24 +371,35 @@ class Persista {
       size:      fullKey.length * 2 + raw.length * 2,
       created:   item.timestamp,
       expires:   getExpiryTimestamp(item),
-      // FIX #2: read valueType from envelope; fall back gracefully for items
-      // written by older versions of the library that didn't store it.
       valueType:  item.valueType ?? (Array.isArray(item.value) ? 'array' : typeof item.value),
       hasExpired: isExpired(item)
     };
   }
 
   /**
-   * Remove items matching the given criteria.
-   *
+   * Remove items matching cleanup criteria.
    * @param {Object}  [options]
-   * @param {number}  [options.olderThan]          - Remove items older than N ms
-   * @param {number}  [options.keep]               - Keep only the N newest items
-   * @param {boolean} [options.removeExpired=true] - Remove expired items
-   * @returns {number} Number of items removed
+   * @param {number}  [options.olderThan]
+   * @param {number}  [options.keep]
+   * @param {boolean} [options.removeExpired=true]
+   * @returns {number}
    */
   cleanup(options = {}) {
     const { olderThan = null, keep = null, removeExpired = true } = options;
+
+    if (olderThan !== null) {
+      if (typeof olderThan !== 'number' || olderThan < 0) {
+        throw new ValidationError('olderThan option must be a non-negative number');
+      }
+    }
+    if (keep !== null) {
+      if (typeof keep !== 'number' || !Number.isInteger(keep) || keep < 0) {
+        throw new ValidationError('keep option must be a non-negative integer');
+      }
+    }
+    if (typeof removeExpired !== 'boolean') {
+      throw new ValidationError('removeExpired option must be a boolean');
+    }
 
     const allKeys       = this.keys();
     const itemsToRemove = new Set();
@@ -393,14 +424,19 @@ class Persista {
     if (keep !== null && items.length - itemsToRemove.size > keep) {
       const remaining = items
         .filter(({ key }) => !itemsToRemove.has(key))
-        .sort((a, b) => b.info.created - a.info.created); // newest first
+        .sort((a, b) => {
+          if (b.info.created !== a.info.created) {
+            return b.info.created - a.info.created;
+          }
+          return a.key.localeCompare(b.key);
+        });
 
       remaining.slice(keep).forEach(({ key }) => itemsToRemove.add(key));
     }
 
     let removedCount = 0;
     for (const key of itemsToRemove) {
-      this.remove(key);
+      this.remove(key, true);
       removedCount++;
     }
 
@@ -408,27 +444,37 @@ class Persista {
     return removedCount;
   }
 
-  // ─── Event system ────────────────────────────────────────────────────────────
-
   /**
-   * Register an event listener.
-   * @param {'set'|'get'|'remove'|'clear'|'expired'} event
+   * Register event listener.
+   * @param {string}   event
    * @param {Function} callback
-   * @returns {this} for chaining
+   * @returns {this}
    */
   on(event, callback) {
+    if (typeof event !== 'string') {
+      throw new ValidationError('Event name must be a string');
+    }
+    if (typeof callback !== 'function') {
+      throw new ValidationError('Event callback must be a function');
+    }
     if (!this.events.has(event)) this.events.set(event, new Set());
     this.events.get(event).add(callback);
     return this;
   }
 
   /**
-   * Remove an event listener.
+   * Remove event listener.
    * @param {string}   event
-   * @param {Function} [callback] - Omit to remove all listeners for the event
+   * @param {Function} [callback]
    * @returns {this}
    */
   off(event, callback) {
+    if (typeof event !== 'string') {
+      throw new ValidationError('Event name must be a string');
+    }
+    if (callback !== undefined && typeof callback !== 'function') {
+      throw new ValidationError('Event callback must be a function');
+    }
     if (!this.events.has(event)) return this;
     if (callback) {
       this.events.get(event).delete(callback);
@@ -438,9 +484,14 @@ class Persista {
     return this;
   }
 
+  /**
+   * Emit event notification.
+   * @private
+   */
   _emit(event, ...args) {
     if (!this.events.has(event)) return;
-    for (const cb of this.events.get(event)) {
+    const listeners = Array.from(this.events.get(event));
+    for (const cb of listeners) {
       try {
         cb(...args);
       } catch (err) {
