@@ -4,5 +4,5 @@ module.exports = {
   transform: {
     '^.+\\.js$': 'babel-jest',
   },
-  setupFiles: ['./jest.setup.js'],
+  setupFiles: ['./jest.setup.cjs'],
 };
