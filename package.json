@@ -11,7 +11,7 @@
     "index.d.ts"
   ],
   "scripts": {
-    "build": "rollup -c",
+    "build": "node api.js && rollup -c",
     "test": "jest",
     "lint": "eslint src",
     "prepublishOnly": "npm run build",
