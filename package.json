@@ -1,6 +1,6 @@
 {
   "name": "persista",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "A powerful localStorage wrapper with expiration, encryption, events and more",
   "main": "dist/persista.js",
