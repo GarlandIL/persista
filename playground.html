@@ -700,7 +700,7 @@
     <!-- Top Header -->
     <header class="app-header">
       <div class="header-info">
-        <h1>Persista Developer Playground <span class="version-badge">v0.2.0</span></h1>
+        <h1>Persista Developer Playground <span class="version-badge">v0.3.0</span></h1>
         <p>Interactive API Sandbox & Live JavaScript Code Generator</p>
       </div>
       <div>
@@ -907,7 +907,7 @@
       const isLocal = ['localhost', '127.0.0.1', ''].includes(window.location.hostname) || window.location.protocol === 'file:';
       script.src = isLocal 
         ? './dist/persista.js' 
-        : 'https://unpkg.com/persista@0.2.0/dist/persista.min.js';
+        : 'https://unpkg.com/persista@0.3.0/dist/persista.min.js';
       
       script.onload = function() {
         console.log(`Loaded Persista from: ${script.src}`);
