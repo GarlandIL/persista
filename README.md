@@ -680,6 +680,12 @@ user?.name; // typed as string | undefined
 
 ## Changelog
 
+### [0.3.0]
+
+- **Added** Interactive Developer Playground hosted on GitHub Pages
+- **Added** Type-safe parameter validation and event guards
+- **Added** Husky pre-commit hooks for test and linter automation
+
 ### [0.2.0]
 
 - **Added** AES-GCM encryption (`encryption.key` option, per-item `encrypt` override)
